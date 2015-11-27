@@ -5,6 +5,8 @@
 //
 // 16 Oct 2015 Fini Jastrow
 
+// cc % -l pthread
+
 #ifdef WIN32
 #  include <winsock2.h>
 #  include <ws2tcpip.h>
@@ -137,7 +139,7 @@ static void calc_id(ID_t* return_id) {
 }
 
 // how our output (payload) looks like
-static inline int make_id_str(const char* s, size_t len, ID_t id) {
+static inline int make_id_str(char* const s, size_t len, ID_t id) {
 	return snprintf(s, len, "%lu.%05lu %c %d %d\r\n", id.id_iq, id.id_sub, id.state, id.jitter, id.jitter0);
 }
 
