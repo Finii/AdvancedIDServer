@@ -5,8 +5,6 @@
 //
 // 16 Oct 2015 Fini Jastrow
 
-// assert: sizeof(struct timeval) == sizeof(long long)
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,14 +26,9 @@
 #define DEBUG(x) x
 //#define DEBUG(x)
 
-union usectime {
-	struct timeval tv;
-	unsigned long long int ti;
-};
-
 // elements of circular buffer with received EventID mesg
 typedef struct {
-	union usectime t;
+	struct timeval t;
 	unsigned long int id;
 	long long int offset;
 } ID_event_t;
@@ -58,14 +51,13 @@ int recon_retry = 0;	// limit reconnect retries
 
 // calculates the event ID and some state information
 // valid for the moment this function is called
-// unsigned long int calc_id(unsigned long int *id_sub) {
 void calc_id(ID_t* return_id) {
 	long long int offset, offset0;
 	long long int id;
 	long long int id_iq;
 	long long int jitter = 0;
 	long long int jitter0;
-	union usectime old;
+	struct timeval old;
 	struct timeval tv;
 	char state;
 	double td;
@@ -76,13 +68,16 @@ void calc_id(ID_t* return_id) {
 	// find smallest offset value
 	// find oldest entry
 	// add the offset jitter
-	old.ti = events[ID_EVENT_WINDOW_SIZE-1].t.ti;
+	old = events[ID_EVENT_WINDOW_SIZE-1].t;
 	offset = events[ID_EVENT_WINDOW_SIZE-1].offset;
 	jitter0 = offset0 = offset;
 
 	for (i = ID_EVENT_WINDOW_SIZE-1; i--;) {
 		if (events[i].offset < offset)	offset = events[i].offset;
-		if (events[i].t.ti < old.ti)	old.ti = events[i].t.ti;
+		if (events[i].t.tv_sec < old.tv_sec ||
+			(events[i].t.tv_sec == old.tv_sec && events[i].t.tv_usec < old.tv_usec))	{
+			old = events[i].t;
+		}
 		jitter += abs(events[i].offset - offset0);
 		jitter0 -= events[i].offset / (ID_EVENT_WINDOW_SIZE-1);
 	}
@@ -103,13 +98,13 @@ void calc_id(ID_t* return_id) {
 
 	// calculate how old the oldest entry is
 	// used to detect state 'stale'
-	if (tv.tv_usec < old.tv.tv_usec) {
+	if (tv.tv_usec < old.tv_usec) {
 		// needed for unsigned subtraction
 		tv.tv_usec += 1000000;
-		old.tv.tv_sec += 1;
+		old.tv_sec += 1;
 	}
-	tv.tv_sec -= old.tv.tv_sec;
-	tv.tv_usec -= old.tv.tv_usec;
+	tv.tv_sec -= old.tv_sec;
+	tv.tv_usec -= old.tv_usec;
 	// tv holds now the time difference to the oldest entry
 	td = tv.tv_sec;
 	td += tv.tv_usec / 1000000.0;
@@ -232,16 +227,16 @@ void* ID_collect(void* nyx) {
 			if (first_entry) {
 				first_entry = 0;
 				for (events_idx = ID_EVENT_WINDOW_SIZE; --events_idx;) {
-					events[events_idx].t.tv.tv_sec = tv.tv_sec;
-					events[events_idx].t.tv.tv_usec = tv.tv_usec;
+					events[events_idx].t.tv_sec = tv.tv_sec;
+					events[events_idx].t.tv_usec = tv.tv_usec;
 					events[events_idx].id = id;
 					events[events_idx].offset = offset;
 				}
 				printf("Connected to EventID server and getting data\n");
 
 			}
-			events[events_idx].t.tv.tv_sec = tv.tv_sec;
-			events[events_idx].t.tv.tv_usec = tv.tv_usec;
+			events[events_idx].t.tv_sec = tv.tv_sec;
+			events[events_idx].t.tv_usec = tv.tv_usec;
 			events[events_idx].id = id;
 			events[events_idx].offset = offset;
 
@@ -270,6 +265,7 @@ void deliver_id() {
 	socklen_t sin_size;
 	char s[INET_ADDRSTRLEN];
 	char msg[100];
+for(;;);
 
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock < 0) {
