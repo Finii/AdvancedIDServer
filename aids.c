@@ -5,15 +5,36 @@
 //
 // 16 Oct 2015 Fini Jastrow
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <errno.h>
-#include <netdb.h>
-#include <pthread.h>
-#include <arpa/inet.h>
+#ifdef WIN32
+#  include <winsock2.h>
+#  include <ws2tcpip.h>
+#  include <errno.h>
+#  include <pthread.h>
+#  include <stdlib.h>
+#  include <stdio.h>
+#  include <string.h>
+#  include <time.h>
+#  include <unistd.h>
+#  include <sys/time.h>
+#  include <sys/types.h>
+/* not declared in windows :'( */
+#  ifndef MSG_DONTWAIT
+#    define MSG_DONTWAIT 0 /* -> 0x40 */
+#  endif
+#  ifndef MSG_NOSIGNAL
+#    define MSG_NOSIGNAL 0 /* -> 0x4000 */
+#  endif
+#else
+#  include <stdio.h>
+#  include <stdlib.h>
+#  include <string.h>
+#  include <sys/types.h>
+#  include <sys/socket.h>
+#  include <errno.h>
+#  include <netdb.h>
+#  include <pthread.h>
+#  include <arpa/inet.h>
+#endif
 
 #define ID_SERVER 	"131.169.232.205"
 #define ID_SERVER_PORT	"58050"
@@ -135,7 +156,7 @@ static int ID_connect(void) {
 	// 2s receive timeout
 	tv.tv_sec = 2;
 	tv.tv_usec = 0;
-	c = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+	c = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
 	if (c < 0) {
 		fprintf(stderr, "ID_connect() setsockopt failed %d\n", errno);
 		return -1;
@@ -178,6 +199,9 @@ static void* ID_collect(void* nyx) {
 			recon_retry++;
 			if (recon_retry > 20) {
 				fprintf(stderr, "ID_collect() giving up to reconnect\n", errno);
+#ifdef WIN32
+				WSACleanup();
+#endif
 				exit(0);
 			}
 			sleep(1);
@@ -273,7 +297,7 @@ for(;;);
 		return;
 	}
 
-	c = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+	c = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (const char *)&yes, sizeof(int));
 	if (c < 0) {
 		fprintf(stderr, "deliver_id() setsockopt failed %d\n", errno);
 		return;
@@ -305,7 +329,11 @@ for(;;);
 			break;
 		}
 
+#ifdef WIN32
+		getnameinfo((const sockaddr*)&client_addr, sizeof(client_addr), s, INET_ADDRSTRLEN, NULL, 0, 0);
+#else
 		inet_ntop(AF_INET, (const void*)(&client_addr.sin_addr), s, INET_ADDRSTRLEN);
+#endif
 		printf("Connected to %s\n", s);
 
 		do { // loop for repeated shouts within one connect
@@ -321,21 +349,40 @@ for(;;);
 			}
 		
 			c = recv(con, msg, sizeof(msg), 0);
+#ifdef WIN32
+		} while (c > 0);
+#else
 			while (c>0) c = recv(con, msg, sizeof(msg), MSG_DONTWAIT); // flush input queue
 		} while (errno == EAGAIN || errno == EWOULDBLOCK);
+#endif
 		printf("Connection dropped\n");
 	}
 	// only reached if failure to open listening socket (= fatal)
 }
 
-void main(void) {
+int main(int argc, char *argv[]) {
 	pthread_t t;
-	
+
+#ifdef WIN32
+	WSADATA wsaData;
+	// initialize the windows socket api
+	memset(&wsaData, 0, sizeof(wsaData));
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+		printf("Init winsock failed\r\n");
+		return 1;
+	}
+#endif
+
 	// connect to the EventID Server to gather information
 	pthread_create(&t, NULL, &ID_collect, NULL);
 
 	// deliver EventIDs with less jitter to users
 	deliver_id();
+
+#ifdef WIN32
+	WSACleanup();
+#endif
+	return 0;
 }
 
 // Following the readme

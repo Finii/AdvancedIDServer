@@ -1,0 +1,60 @@
+#!/bin/make -f
+#
+# For cross-compile installed packages:
+#	mingw-binutils-generic
+#	mingw-filesystem-base
+#	mingw32-filesystem
+#	mingw32-binutils
+#	mingw32-crt
+#	mingw32-cpp
+#	mingw32-gcc
+#	mingw32-gcc-c++
+#	mingw32-headers
+#	mingw32-winpthreads
+#	mingw32-winpthreads-static
+#
+
+INCS += -I.
+LIBS += -lws2_32
+
+CC        = i686-w64-mingw32-gcc
+CXX       = i686-w64-mingw32-g++
+CPPFLAGS  += ${INCS}
+CFLAGS    += -g -Wall
+CXXFLAGS  += -g -Wall -D_POSIX_THREAD_SAFE_FUNCTIONS
+LDFLAGS   += -g -static ${LIBS}
+
+SRC = aids.c
+BIN = aids.exe
+
+all: options ${BIN}
+	
+
+.cc.o:
+	@echo CXX  $<
+	@${CXX} -c ${CXXFLAGS} ${CPPFLAGS} $<
+
+.c.o:
+	@echo CC   $<
+	@${CC} -c ${CFLAGS} ${CPPFLAGS} $<
+
+aids.exe: ${SRC:.cc=.o}
+	@echo LD   $@
+	@${CC} -o $@ $^ ${LDFLAGS}
+
+options:
+	@echo "Build Options:"
+	@echo "--------------"
+	@echo "   CC:......... $(CC)"
+	@echo "   CXX:........ $(CXX)"
+	@echo "   CPPFLAGS:... $(CPPFLAGS)"
+	@echo "   CFLAGS:..... $(CFLAGS)"
+	@echo "   CXXFLAGS:... $(CXXFLAGS)"
+	@echo "   LDFLAGS:.... $(LDFLAGS)"
+	@echo ""
+
+clean:
+	@echo RM ${BIN} *.o
+	@rm -f ${BIN} *.o
+
+.PHONY: options
