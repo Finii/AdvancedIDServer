@@ -43,15 +43,15 @@ typedef struct {
 } ID_t;
 
 // God bless global variables
-ID_event_t events[ID_EVENT_WINDOW_SIZE]; // circular buffer
-int events_idx  = 0;	// next element to be overwritten
-int first_entry = 1;	// events[] not yet initialized
-int connected	= 0;	// are we connected to the EventID server
-int recon_retry = 0;	// limit reconnect retries
+static ID_event_t events[ID_EVENT_WINDOW_SIZE]; // circular buffer
+static int events_idx  = 0;	// next element to be overwritten
+static int first_entry = 1;	// events[] not yet initialized
+static int connected	= 0;	// are we connected to the EventID server
+static int recon_retry = 0;	// limit reconnect retries
 
 // calculates the event ID and some state information
 // valid for the moment this function is called
-void calc_id(ID_t* return_id) {
+static void calc_id(ID_t* return_id) {
 	long long int offset, offset0;
 	long long int id;
 	long long int id_iq;
@@ -116,12 +116,12 @@ void calc_id(ID_t* return_id) {
 }
 
 // how our output (payload) looks like
-inline int make_id_str(char* s, size_t len, ID_t id) {
+static inline int make_id_str(const char* s, size_t len, ID_t id) {
 	return snprintf(s, len, "%lu.%05lu %c %d %d\r\n", id.id_iq, id.id_sub, id.state, id.jitter, id.jitter0);
 }
 
 // connects to the EventID Server
-int ID_connect(void) {
+static int ID_connect(void) {
 	struct addrinfo *a;
 	struct timeval tv;
 	int sock, c, err;
@@ -161,7 +161,7 @@ int ID_connect(void) {
 // and stores it in our ringbuffer
 //
 // runs in a sub-thread
-void* ID_collect(void* nyx) {
+static void* ID_collect(void* nyx) {
 	char buff[ID_MESSAGE_SIZE];
 	unsigned long int id;
 	long long int offset;
