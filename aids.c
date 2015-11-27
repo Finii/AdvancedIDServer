@@ -67,10 +67,10 @@ typedef struct {
 
 // God bless global variables
 static ID_event_t events[ID_EVENT_WINDOW_SIZE]; // circular buffer
-static int events_idx  = 0;	// next element to be overwritten
-static int first_entry = 1;	// events[] not yet initialized
+static int events_idx	= 0;	// next element to be overwritten
+static int first_entry	= 1;	// events[] not yet initialized
 static int connected	= 0;	// are we connected to the EventID server
-static int recon_retry = 0;	// limit reconnect retries
+static int recon_retry	= 0;	// limit reconnect retries
 
 // calculates the event ID and some state information
 // valid for the moment this function is called
@@ -291,7 +291,6 @@ void deliver_id() {
 	socklen_t sin_size;
 	char s[INET_ADDRSTRLEN];
 	char msg[100];
-for(;;);
 
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock < 0) {
