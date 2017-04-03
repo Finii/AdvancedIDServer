@@ -177,8 +177,7 @@ static int ID_connect(void) {
 		return -1;
 	}
 
-
-	fprintf(stdout, "Connect successful...\r\n");
+	fprintf(stdout, "Connection to %s successful\r\n", a->ai_canonname ?: ID_SERVER);
 	return sock;
 }
 
@@ -209,6 +208,7 @@ static void* ID_collect(void* nyx) {
 				exit(0);
 			}
 			fprintf(stderr, "Connect failed, %d/20 retries left...\r\n", recon_retry);
+			fprintf(stderr, "Next retry in %dsec\r\n", 2*recon_retry);
 			sleep(2*recon_retry);
 			continue;
 		}
@@ -221,7 +221,8 @@ static void* ID_collect(void* nyx) {
 			if (x <= 0) {
 				// timeout ... check if still connected
 				// and/or maybe reconnect
-				fprintf(stderr, "ID_collect() recv failed, closing socket: %s\r\n", strerror(errno));
+				fprintf(stderr, "ID_collect() recv failed, %d bytes received, closing socket: %s\r\n",
+					x, strerror(errno));
 				close(sock); // lazy...
 				connected = 0;
 				break;
