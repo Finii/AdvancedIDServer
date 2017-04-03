@@ -336,7 +336,7 @@ void deliver_id() {
 		}
 
 #ifdef WIN32
-		getnameinfo((const sockaddr*)&client_addr, sizeof(client_addr), s, INET_ADDRSTRLEN, NULL, 0, 0);
+		getnameinfo((const struct sockaddr *)&client_addr, sizeof(client_addr), s, INET_ADDRSTRLEN, NULL, 0, 0);
 #else
 		inet_ntop(AF_INET, (const void*)(&client_addr.sin_addr), s, INET_ADDRSTRLEN);
 #endif
