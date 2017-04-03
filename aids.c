@@ -177,6 +177,8 @@ static int ID_connect(void) {
 		return -1;
 	}
 
+
+	fprintf(stdout, "Connect successful...\r\n");
 	return sock;
 }
 
@@ -206,6 +208,7 @@ static void* ID_collect(void* nyx) {
 #endif
 				exit(0);
 			}
+			fprintf(stderr, "Connect failed, %d/20 retries left...\r\n", recon_retry);
 			sleep(1);
 			continue;
 		}
@@ -225,6 +228,7 @@ static void* ID_collect(void* nyx) {
 			} else if (x == ID_MESSAGE_SIZE) {
 				// we dont want these big messages, just drop it
 				// and wait for the next one
+				printf("ID_collect() skipping invalid message\r\n");
 				continue;
 			}
 			// decode message and put into events array
@@ -235,7 +239,7 @@ static void* ID_collect(void* nyx) {
 
 			if (x <= 0) {
 				// error reading packet, just ignore it
-				DEBUG(printf("ID_collect() skipping unparsable message\r\n"));
+				printf("ID_collect() skipping unparsable message\r\n");
 				continue;
 			}
 
