@@ -218,7 +218,7 @@ static void* ID_collect(void* nyx) {
 			x = recv(sock, buff, ID_MESSAGE_SIZE, 0);
 			gettimeofday(&tv, NULL);
 		
-			if (x < 0) {
+			if (x <= 0) {
 				// timeout ... check if still connected
 				// and/or maybe reconnect
 				fprintf(stderr, "ID_collect() recv failed, closing socket: %s\r\n", strerror(errno));
