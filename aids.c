@@ -209,7 +209,7 @@ static void* ID_collect(void* nyx) {
 				exit(0);
 			}
 			fprintf(stderr, "Connect failed, %d/20 retries left...\r\n", recon_retry);
-			sleep(1);
+			sleep(2*recon_retry);
 			continue;
 		}
 
