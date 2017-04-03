@@ -46,8 +46,8 @@
 #define ID_EVENT_WINDOW_SIZE	40
 
 // Turns on mostly receive and decode debug messages
-#define DEBUG(x) x
-//#define DEBUG(x)
+//#define DEBUG(x) x
+#define DEBUG(x)
 
 // elements of circular buffer with received EventID mesg
 typedef struct {
