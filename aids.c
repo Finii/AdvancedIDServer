@@ -200,7 +200,7 @@ static void* ID_collect(void* nyx) {
 			// Maybe try to reconnect etc pp
 			recon_retry++;
 			if (recon_retry > 20) {
-				fprintf(stderr, "ID_collect() giving up to reconnect\n", errno);
+				fprintf(stderr, "ID_collect() giving up to reconnect\r\n");
 #ifdef WIN32
 				WSACleanup();
 #endif
@@ -234,7 +234,7 @@ static void* ID_collect(void* nyx) {
 
 			if (x <= 0) {
 				// error reading packet, just ignore it
-				DEBUG(printf("skipping unparsable message\n"));
+				DEBUG(printf("ID_collect() skipping unparsable message\r\n"));
 				continue;
 			}
 
@@ -246,7 +246,7 @@ static void* ID_collect(void* nyx) {
 				+ 1000000 * (unsigned long long int) tv.tv_sec
 				- 100000 * (unsigned long long int) id;
 
-			DEBUG(printf("ID %2d found %lx -=> Offset %lld\n", events_idx, id, offset));
+			DEBUG(printf("ID %2d found %lx -=> Offset %lld\r\n", events_idx, id, offset));
 
 			// fill all buffer entries with the first ID we receive
 			// this alleviates us of several nasty sanity checks ;)
@@ -258,7 +258,7 @@ static void* ID_collect(void* nyx) {
 					events[events_idx].id = id;
 					events[events_idx].offset = offset;
 				}
-				printf("Connected to EventID server and getting data\n");
+				printf("Connected to EventID server and getting data\r\n");
 
 			}
 			events[events_idx].t.tv_sec = tv.tv_sec;
@@ -320,7 +320,7 @@ void deliver_id() {
 		return;
 	}
 
-	printf("waiting for connections...\n");
+	printf("waiting for connections...\r\n");
 
 	for (;;) { // main accept() loop
 		sin_size = sizeof(client_addr);
@@ -335,7 +335,7 @@ void deliver_id() {
 #else
 		inet_ntop(AF_INET, (const void*)(&client_addr.sin_addr), s, INET_ADDRSTRLEN);
 #endif
-		printf("Connected to %s\n", s);
+		printf("Connected to %s\r\n", s);
 
 		do { // loop for repeated shouts within one connect
 			calc_id(&myid);
@@ -356,7 +356,7 @@ void deliver_id() {
 			while (c>0) c = recv(con, msg, sizeof(msg), MSG_DONTWAIT); // flush input queue
 		} while (errno == EAGAIN || errno == EWOULDBLOCK);
 #endif
-		printf("Connection dropped\n");
+		printf("Connection dropped\r\n");
 	}
 	// only reached if failure to open listening socket (= fatal)
 }
