@@ -151,7 +151,7 @@ static int ID_connect(void) {
 
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock < 0) {
-		fprintf(stderr, "ID_connect() socket failed %d\n", errno);
+		fprintf(stderr, "ID_connect() socket failed: %s\r\n", strerror(errno));
 		return -1;
 	}
 
@@ -160,20 +160,20 @@ static int ID_connect(void) {
 	tv.tv_usec = 0;
 	c = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
 	if (c < 0) {
-		fprintf(stderr, "ID_connect() setsockopt failed %d\n", errno);
+		fprintf(stderr, "ID_connect() setsockopt failed: %s\r\n", strerror(errno));
 		return -1;
 	}
 
 	err = getaddrinfo(ID_SERVER, ID_SERVER_PORT, NULL, &a);
 	if (err) {
-		fprintf(stderr, "ID_connect() getaddrinfo failed %d\n", err);
+		fprintf(stderr, "ID_connect() getaddrinfo failed: %s\r\n", strerror(err));
 		return -1;
 	}
 
 	c = connect(sock, a->ai_addr, a->ai_addrlen);
 	freeaddrinfo(a);
 	if (c < 0) {
-		fprintf(stderr, "ID_connect() connect failed %d\n", errno);
+		fprintf(stderr, "ID_connect() connect failed: %s\r\n", strerror(errno));
 		return -1;
 	}
 
@@ -218,6 +218,7 @@ static void* ID_collect(void* nyx) {
 			if (x < 0) {
 				// timeout ... check if still connected
 				// and/or maybe reconnect
+				fprintf(stderr, "ID_collect() recv failed, closing socket: %s\r\n", strerror(errno));
 				close(sock); // lazy...
 				connected = 0;
 				break;
@@ -294,13 +295,13 @@ void deliver_id() {
 
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock < 0) {
-		fprintf(stderr, "deliver_id() socket failed %d\n", errno);
+		fprintf(stderr, "deliver_id() socket failed: %s\r\n", strerror(errno));
 		return;
 	}
 
 	c = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (const char *)&yes, sizeof(int));
 	if (c < 0) {
-		fprintf(stderr, "deliver_id() setsockopt failed %d\n", errno);
+		fprintf(stderr, "deliver_id() setsockopt failed: %s\r\n", strerror(errno));
 		return;
 	}
 
@@ -310,13 +311,13 @@ void deliver_id() {
 	c = bind(sock, (struct sockaddr*)&serv, sizeof(serv));
 	if (c < 0) {
 		close(sock);
-		fprintf(stderr, "deliver_id() bind failed %d\n", errno);
+		fprintf(stderr, "deliver_id() bind failed: %s\r\n", strerror(errno));
 		return;
 	}
 
 	c = listen(sock, 1);
 	if (c < 0) {
-		fprintf(stderr, "deliver_id() listen failed %d\n", errno);
+		fprintf(stderr, "deliver_id() listen failed: %s\r\n", strerror(errno));
 		return;
 	}
 
@@ -326,7 +327,7 @@ void deliver_id() {
 		sin_size = sizeof(client_addr);
 		con = accept(sock, (struct sockaddr*)&client_addr, &sin_size);
 		if (con < 0) {
-			fprintf(stderr, "deliver_id() accept failed %d\n", errno);
+			fprintf(stderr, "deliver_id() accept failed: %s\r\n", strerror(errno));
 			break;
 		}
 
@@ -344,7 +345,7 @@ void deliver_id() {
 			if (c < 0) {
 				close(con);
 				if (errno != ECONNRESET && errno != EPIPE) {
-					fprintf(stderr, "deliver_id() send failed %d\n", errno);
+					fprintf(stderr, "deliver_id() send failed: %s\r\n", strerror(errno));
 					break;
 				}
 			}
