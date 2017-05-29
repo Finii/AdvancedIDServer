@@ -161,12 +161,14 @@ static int ID_connect(void) {
 	c = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
 	if (c < 0) {
 		fprintf(stderr, "ID_connect() setsockopt failed: %s\r\n", strerror(errno));
+		close(sock);
 		return -1;
 	}
 
 	err = getaddrinfo(ID_SERVER, ID_SERVER_PORT, NULL, &a);
 	if (err) {
 		fprintf(stderr, "ID_connect() getaddrinfo failed: %s\r\n", strerror(err));
+		close(sock);
 		return -1;
 	}
 
@@ -174,6 +176,7 @@ static int ID_connect(void) {
 	freeaddrinfo(a);
 	if (c < 0) {
 		fprintf(stderr, "ID_connect() connect failed: %s\r\n", strerror(errno));
+		close(sock);
 		return -1;
 	}
 
