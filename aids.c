@@ -77,6 +77,15 @@ gettimeofday(struct timeval * tp, struct timezone * tzp)
 #define ID_SERVER_PORT	"58050"
 #define OUR_PORT	58051
 
+/* SO_REUSEPORT is not supported by older systems
+ *
+ * see http://stackoverflow.com/questions/3261965/so-reuseport-on-linux
+ * > On Linux, SO_REUSEADDR provide most of what SO_REUSEPORT
+ * > provides on BSD. */
+#ifndef SO_REUSEPORT
+#define SO_REUSEPORT SO_REUSEADDR
+#endif
+
 #define ID_MESSAGE_SIZE	10000
 #define ID_EVENT_WINDOW_SIZE	40
 
@@ -211,7 +220,11 @@ static int ID_connect(void) {
 		return -1;
 	}
 #endif
-
+	/* allow port reuse (optional, linux only) */
+	err = setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, (char*)&opt, sizeof(opt));
+	if (err < 0) {
+		fprintf(stderr, "ID_connect() setsockopt failed: %s\r\n", strerror(errno));
+	}
 
 	err = getaddrinfo(ID_SERVER, ID_SERVER_PORT, NULL, &a);
 	if (err) {
