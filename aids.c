@@ -11,13 +11,10 @@
 #  include <winsock2.h>
 #  include <ws2tcpip.h>
 #  include <errno.h>
-#  include <pthread.h>
 #  include <stdlib.h>
 #  include <stdio.h>
 #  include <string.h>
 #  include <time.h>
-#  include <unistd.h>
-#  include <sys/time.h>
 #  include <sys/types.h>
 /* not declared in windows :'( */
 #  ifndef MSG_DONTWAIT
@@ -26,16 +23,54 @@
 #  ifndef MSG_NOSIGNAL
 #    define MSG_NOSIGNAL 0 /* -> 0x4000 */
 #  endif
+
+#  ifndef __MINGW__
+#define sleep(x) Sleep(x * 1000)
+#define close(x) closesocket(x)
+
+/* FILETIME of Jan 1 1970 00:00:00. */
+static const unsigned __int64 epoch = ((unsigned __int64)116444736000000000ULL);
+
+/*
+* timezone information is stored outside the kernel so tzp isn't used anymore.
+*
+* Note: this function is not for Win32 high precision timing purpose. See
+* elapsed_time().
+*/
+int
+gettimeofday(struct timeval * tp, struct timezone * tzp)
+{
+	FILETIME    file_time;
+	SYSTEMTIME  system_time;
+	ULARGE_INTEGER ularge;
+
+	GetSystemTime(&system_time);
+	SystemTimeToFileTime(&system_time, &file_time);
+	ularge.LowPart = file_time.dwLowDateTime;
+	ularge.HighPart = file_time.dwHighDateTime;
+
+	tp->tv_sec = (long)((ularge.QuadPart - epoch) / 10000000L);
+	tp->tv_usec = (long)(system_time.wMilliseconds * 1000);
+
+	return 0;
+}
+#  else
+#    include <pthread.h>
+#    include <unistd.h>
+#    include <sys/time.h>
+#  endif
 #else
-#  include <stdio.h>
-#  include <stdlib.h>
-#  include <string.h>
-#  include <sys/types.h>
-#  include <sys/socket.h>
 #  include <errno.h>
 #  include <netdb.h>
 #  include <pthread.h>
+#  include <stdio.h>
+#  include <stdlib.h>
+#  include <string.h>
+#  include <unistd.h>
 #  include <arpa/inet.h>
+#  include <sys/time.h>
+#  include <sys/types.h>
+#  include <sys/socket.h>
 #endif
 
 #define ID_SERVER 	"131.169.232.205"
@@ -193,7 +228,7 @@ static int ID_connect(void) {
 		return -1;
 	}
 
-	fprintf(stdout, "Connection to %s successful\r\n", a->ai_canonname ?: ID_SERVER);
+	fprintf(stdout, "Connection to %s successful\r\n", a->ai_canonname ? a->ai_canonname : ID_SERVER);
 	return sock;
 }
 
@@ -384,9 +419,7 @@ void deliver_id() {
 }
 
 int main(int argc, char *argv[]) {
-	pthread_t t;
-
-#ifdef WIN32
+#if defined(WIN32) && !defined(__MINGW__)
 	WSADATA wsaData;
 	// initialize the windows socket api
 	memset(&wsaData, 0, sizeof(wsaData));
@@ -394,11 +427,13 @@ int main(int argc, char *argv[]) {
 		printf("Init winsock failed\r\n");
 		return 1;
 	}
-#endif
 
+	CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)&ID_collect, NULL, 0, NULL);
+#else
+	pthread_t t;
 	// connect to the EventID Server to gather information
 	pthread_create(&t, NULL, &ID_collect, NULL);
-
+#endif
 	// deliver EventIDs with less jitter to users
 	deliver_id();
 
