@@ -73,9 +73,12 @@ gettimeofday(struct timeval * tp, struct timezone * tzp)
 #  include <sys/socket.h>
 #endif
 
-#define ID_SERVER 	"131.169.232.205"
-#define ID_SERVER_PORT	"58050"
-#define OUR_PORT	58051
+#define ID_SERVER       "131.169.232.205"
+#define ID_SERVER_PORT  "58050"
+#define OUR_PORT        58051
+
+#define ID_MESSAGE_SIZE 10000
+#define ID_EVENT_WINDOW_SIZE    40
 
 /* SO_REUSEPORT is not supported by older systems
  *
@@ -86,8 +89,6 @@ gettimeofday(struct timeval * tp, struct timezone * tzp)
 #define SO_REUSEPORT SO_REUSEADDR
 #endif
 
-#define ID_MESSAGE_SIZE	10000
-#define ID_EVENT_WINDOW_SIZE	40
 
 // Turns on mostly receive and decode debug messages
 //#define DEBUG(x) x
@@ -278,10 +279,8 @@ static void* ID_collect(void* nyx) {
 		}
 
 		for(;;) { // loop over several msgs
-	
 			x = recv(sock, buff, ID_MESSAGE_SIZE, 0);
 			gettimeofday(&tv, NULL);
-		
 			if (x <= 0) {
 				// timeout ... check if still connected
 				// and/or maybe reconnect
@@ -418,7 +417,7 @@ void deliver_id() {
 					break;
 				}
 			}
-		
+
 			c = recv(con, msg, sizeof(msg), 0);
 #ifdef WIN32
 		} while (c > 0);
