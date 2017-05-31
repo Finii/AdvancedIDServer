@@ -140,14 +140,15 @@ static void calc_id(ID_t* return_id) {
 
 // how our output (payload) looks like
 static inline int make_id_str(char* const s, size_t len, ID_t id) {
-	return snprintf(s, len, "%lu.%05lu %c %d %d\r\n", id.id_iq, id.id_sub, id.state, id.jitter, id.jitter0);
+	return snprintf(s, len, "%lu.%05lu %c %d %d\r\n",
+		id.id_iq, id.id_sub, id.state,
+		id.jitter, id.jitter0);
 }
 
 // connects to the EventID Server
 static int ID_connect(void) {
+	int sock, c, err, opt = 1;
 	struct addrinfo *a;
-	struct timeval tv;
-	int sock, c, err;
 
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock < 0) {
@@ -155,15 +156,27 @@ static int ID_connect(void) {
 		return -1;
 	}
 
-	// 2s receive timeout
-	tv.tv_sec = 2;
-	tv.tv_usec = 0;
-	c = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
-	if (c < 0) {
+#if WIN32
+	DWORD to = 2 * 1000;
+	err = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&to, sizeof(to));
+	if (err < 0) {
 		fprintf(stderr, "ID_connect() setsockopt failed: %s\r\n", strerror(errno));
 		close(sock);
 		return -1;
 	}
+#else
+	struct timeval tv;
+	// 2s receive timeout
+	tv.tv_sec = 2;
+	tv.tv_usec = 0;
+	err = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const void *)&tv, sizeof(tv));
+	if (err < 0) {
+		fprintf(stderr, "ID_connect() setsockopt failed: %s\r\n", strerror(errno));
+		close(sock);
+		return -1;
+	}
+#endif
+
 
 	err = getaddrinfo(ID_SERVER, ID_SERVER_PORT, NULL, &a);
 	if (err) {
