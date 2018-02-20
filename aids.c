@@ -94,6 +94,7 @@ gettimeofday(struct timeval * tp, struct timezone * tzp)
 //#define DEBUG(x) x
 #define DEBUG(x)
 
+
 // elements of circular buffer with received EventID mesg
 typedef struct {
 	struct timeval t;
@@ -110,16 +111,50 @@ typedef struct {
 	int jitter0;
 } ID_t;
 
-// God bless global variables
-static ID_event_t events[ID_EVENT_WINDOW_SIZE]; // circular buffer
-static int events_idx	= 0;	// next element to be overwritten
-static int first_entry	= 1;	// events[] not yet initialized
-static int connected	= 0;	// are we connected to the EventID server
-static int recon_retry	= 0;	// limit reconnect retries
+// Globals suck
+typedef struct {
+	ID_event_t events[ID_EVENT_WINDOW_SIZE]; // circular buffer
+	int events_idx;	// next element to be overwritten
+	int connected;	// are we connected to the EventID server
+	char *host;
+	char *service;
+} context_t;
+
+
+static void context_destroy(context_t *ctx)
+{
+	if (!ctx)
+		return;
+
+	if (ctx->host) {
+		free(ctx->host);
+		ctx->host = NULL;
+	}
+
+	if (ctx->service) {
+		free(ctx->service);
+		ctx->service = NULL;
+	}
+
+	free(ctx);
+	ctx = NULL;
+}
+
+static context_t* context_create()
+{
+	context_t *ctx = NULL;
+
+	ctx = calloc(1, sizeof(*ctx));
+	if (!ctx)
+		return NULL;
+
+	return ctx;
+}
 
 // calculates the event ID and some state information
 // valid for the moment this function is called
-static void calc_id(ID_t* return_id) {
+static void calc_id(context_t *ctx, ID_t* return_id)
+{
 	long long int offset, offset0;
 	long long int id;
 	long long int id_iq;
@@ -136,18 +171,20 @@ static void calc_id(ID_t* return_id) {
 	// find smallest offset value
 	// find oldest entry
 	// add the offset jitter
-	old = events[ID_EVENT_WINDOW_SIZE-1].t;
-	offset = events[ID_EVENT_WINDOW_SIZE-1].offset;
+	old = ctx->events[ID_EVENT_WINDOW_SIZE-1].t;
+	offset = ctx->events[ID_EVENT_WINDOW_SIZE-1].offset;
 	jitter0 = offset0 = offset;
 
 	for (i = ID_EVENT_WINDOW_SIZE-1; i--;) {
-		if (events[i].offset < offset)	offset = events[i].offset;
-		if (events[i].t.tv_sec < old.tv_sec ||
-			(events[i].t.tv_sec == old.tv_sec && events[i].t.tv_usec < old.tv_usec))	{
-			old = events[i].t;
+		if (ctx->events[i].offset < offset)
+			offset = ctx->events[i].offset;
+		if (ctx->events[i].t.tv_sec < old.tv_sec ||
+		    (ctx->events[i].t.tv_sec == old.tv_sec && ctx->events[i].t.tv_usec < old.tv_usec))
+		{
+			old = ctx->events[i].t;
 		}
-		jitter += abs(events[i].offset - offset0);
-		jitter0 -= events[i].offset / (ID_EVENT_WINDOW_SIZE-1);
+		jitter += abs(ctx->events[i].offset - offset0);
+		jitter0 -= ctx->events[i].offset / (ID_EVENT_WINDOW_SIZE-1);
 	}
 	jitter /= ID_EVENT_WINDOW_SIZE;
 
@@ -177,9 +214,14 @@ static void calc_id(ID_t* return_id) {
 	td = tv.tv_sec;
 	td += tv.tv_usec / 1000000.0;
 
-	if (td > ID_EVENT_WINDOW_SIZE * 0.15) state = 'S';
-	else state = 'O';
-	if (!connected) state = 'D';
+	if (td > ID_EVENT_WINDOW_SIZE * 0.15)
+		state = 'S';
+	else
+		state = 'O';
+
+	if (!ctx->connected)
+		state = 'D';
+
 	return_id->state = state;
 }
 
@@ -191,7 +233,8 @@ static inline int make_id_str(char* const s, size_t len, ID_t id) {
 }
 
 // connects to the EventID Server
-static int ID_connect(void) {
+static int ID_connect_to(const char *address, const char *service)
+{
 	int sock, c, err, opt = 1;
 	struct addrinfo *a;
 
@@ -227,7 +270,7 @@ static int ID_connect(void) {
 		fprintf(stderr, "ID_connect() setsockopt failed: %s\r\n", strerror(errno));
 	}
 
-	err = getaddrinfo(ID_SERVER, ID_SERVER_PORT, NULL, &a);
+	err = getaddrinfo(address, service, NULL, &a);
 	if (err) {
 		fprintf(stderr, "ID_connect() getaddrinfo failed: %s\r\n", strerror(err));
 		close(sock);
@@ -242,18 +285,33 @@ static int ID_connect(void) {
 		return -1;
 	}
 
-	fprintf(stdout, "Connection to %s successful\r\n", a->ai_canonname ? a->ai_canonname : ID_SERVER);
+	fprintf(stdout, "Connection to %s successful\r\n", a->ai_canonname ? a->ai_canonname : address);
 	return sock;
 }
+
+static int ID_connect(context_t *ctx)
+{
+	if (!ctx->host)
+		ctx->host = strdup(ID_SERVER);
+	if (!ctx->service)
+		ctx->service = strdup(ID_SERVER_PORT);
+
+	return ID_connect_to(ctx->host, ctx->service);
+}
+
 
 // collects continuously all data from the EventID server
 // and stores it in our ringbuffer
 //
 // runs in a sub-thread
-static void* ID_collect(void* nyx) {
+static void* ID_collect(void* nyx)
+{
+	context_t *ctx = (context_t *)nyx;
 	char buff[ID_MESSAGE_SIZE];
 	unsigned long int id;
 	long long int offset;
+	int recon_retry = 0;
+	int first_entry= 1;
 	struct timeval tv;
 	int sock, x;
 	ID_t myid;
@@ -261,7 +319,7 @@ static void* ID_collect(void* nyx) {
 	unsigned long int id_iq, id_sub;
 
 	for(;;) { // loop over several reconnects
-		sock = ID_connect();
+		sock = ID_connect(ctx);
 		if (sock < 0) {
 			// Maybe try to reconnect etc pp
 			recon_retry++;
@@ -287,7 +345,7 @@ static void* ID_collect(void* nyx) {
 				fprintf(stderr, "ID_collect() recv failed, %d bytes received, closing socket: %s\r\n",
 					x, strerror(errno));
 				close(sock); // lazy...
-				connected = 0;
+				ctx->connected = 0;
 				break;
 			} else if (x == ID_MESSAGE_SIZE) {
 				// we dont want these big messages, just drop it
@@ -315,31 +373,31 @@ static void* ID_collect(void* nyx) {
 				+ 1000000 * (unsigned long long int) tv.tv_sec
 				- 100000 * (unsigned long long int) id;
 
-			DEBUG(printf("ID %2d found %lx -=> Offset %lld\r\n", events_idx, id, offset));
+			DEBUG(printf("ID %2d found %lx -=> Offset %lld\r\n", ctx->events_idx, id, offset));
 
 			// fill all buffer entries with the first ID we receive
 			// this alleviates us of several nasty sanity checks ;)
 			if (first_entry) {
 				first_entry = 0;
-				for (events_idx = ID_EVENT_WINDOW_SIZE; --events_idx;) {
-					events[events_idx].t.tv_sec = tv.tv_sec;
-					events[events_idx].t.tv_usec = tv.tv_usec;
-					events[events_idx].id = id;
-					events[events_idx].offset = offset;
+				for (ctx->events_idx = ID_EVENT_WINDOW_SIZE; --ctx->events_idx;) {
+					ctx->events[ctx->events_idx].t.tv_sec = tv.tv_sec;
+					ctx->events[ctx->events_idx].t.tv_usec = tv.tv_usec;
+					ctx->events[ctx->events_idx].id = id;
+					ctx->events[ctx->events_idx].offset = offset;
 				}
 				printf("Connected to EventID server and getting data\r\n");
 
 			}
-			events[events_idx].t.tv_sec = tv.tv_sec;
-			events[events_idx].t.tv_usec = tv.tv_usec;
-			events[events_idx].id = id;
-			events[events_idx].offset = offset;
+			ctx->events[ctx->events_idx].t.tv_sec = tv.tv_sec;
+			ctx->events[ctx->events_idx].t.tv_usec = tv.tv_usec;
+			ctx->events[ctx->events_idx].id = id;
+			ctx->events[ctx->events_idx].offset = offset;
 
-			events_idx = (events_idx + 1) % ID_EVENT_WINDOW_SIZE;
-			connected = 1;
+			ctx->events_idx = (ctx->events_idx + 1) % ID_EVENT_WINDOW_SIZE;
+			ctx->connected = 1;
 			recon_retry = 0;
 
-			DEBUG(calc_id(&myid));
+			DEBUG(calc_id(ctx, &myid));
 			DEBUG(make_id_str(buff, sizeof(buff), myid));
 			DEBUG(printf("%s", buff));
 
@@ -351,7 +409,8 @@ static void* ID_collect(void* nyx) {
 // (the main user interaction)
 // Shout-out the calculated EventID on establishing the connection
 // Shout-out again on any incoming packet
-void deliver_id() {
+static void deliver_id(context_t *ctx)
+{
 	int sock, con;
 	int yes = 1, i, c;
 	struct addrinfo hints, *svr, *p;
@@ -407,7 +466,7 @@ void deliver_id() {
 		printf("Connected to %s\r\n", s);
 
 		do { // loop for repeated shouts within one connect
-			calc_id(&myid);
+			calc_id(ctx, &myid);
 			make_id_str(msg, sizeof(msg), myid);
 			c = send(con, msg, strlen(msg), MSG_NOSIGNAL);
 			if (c < 0) {
@@ -422,7 +481,8 @@ void deliver_id() {
 #ifdef WIN32
 		} while (c > 0);
 #else
-			while (c>0) c = recv(con, msg, sizeof(msg), MSG_DONTWAIT); // flush input queue
+			while (c>0)
+				c = recv(con, msg, sizeof(msg), MSG_DONTWAIT); // flush input queue
 		} while (errno == EAGAIN || errno == EWOULDBLOCK);
 #endif
 		printf("Connection dropped\r\n");
@@ -430,7 +490,19 @@ void deliver_id() {
 	// only reached if failure to open listening socket (= fatal)
 }
 
-int main(int argc, char *argv[]) {
+
+int main(int argc, char *argv[])
+{
+	context_t *ctx = context_create();
+	if (!ctx)
+		return 2;
+
+	// allow to specify alternate address and port
+	if (argc > 1)
+		ctx->host = strdup(argv[1]);
+	if (argc > 2)
+		ctx->service = strdup(argv[2]);
+
 #if defined(WIN32) && !defined(__MINGW__)
 	WSADATA wsaData;
 	// initialize the windows socket api
@@ -440,18 +512,19 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
-	CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)&ID_collect, NULL, 0, NULL);
+	CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)&ID_collect, ctx, 0, NULL);
 #else
 	pthread_t t;
 	// connect to the EventID Server to gather information
-	pthread_create(&t, NULL, &ID_collect, NULL);
+	pthread_create(&t, NULL, &ID_collect, ctx);
 #endif
 	// deliver EventIDs with less jitter to users
-	deliver_id();
+	deliver_id(ctx);
 
 #ifdef WIN32
 	WSACleanup();
 #endif
+	context_destroy(ctx);
 	return 0;
 }
 
