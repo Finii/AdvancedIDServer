@@ -71,7 +71,7 @@ gettimeofday(struct timeval * tp, struct timezone * tzp)
 #  include <sys/socket.h>
 #endif
 
-#define ID_SERVER       "131.169.232.205"
+#define ID_SERVER       "hasfhvctrl.desy.de"
 #define ID_SERVER_PORT  "58050"
 #define OUR_PORT        58051
 
