@@ -5,8 +5,6 @@
 //
 // 16 Oct 2015 Fini Jastrow
 
-// cc % -l pthread
-
 #ifdef WIN32
 #  include <winsock2.h>
 #  include <ws2tcpip.h>
