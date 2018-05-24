@@ -116,6 +116,7 @@ typedef struct {
 	int connected;	// are we connected to the EventID server
 	char *host;
 	char *service;
+	char ever_got_id;
 } context_t;
 
 
@@ -236,6 +237,7 @@ static int ID_connect_to(const char *address, const char *service)
 	int sock, c, err, opt = 1;
 	struct addrinfo *a;
 
+	fprintf(stdout, "Trying to connect to %s\r\n", address);
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock < 0) {
 		fprintf(stderr, "ID_connect() socket failed: %s\r\n", strerror(errno));
@@ -302,7 +304,7 @@ static int ID_connect(context_t *ctx)
 // and stores it in our ringbuffer
 //
 // runs in a sub-thread
-static void* ID_collect(void* nyx)
+/* _Noreturn */ static void* ID_collect(void* nyx)
 {
 	context_t *ctx = (context_t *)nyx;
 	char buff[ID_MESSAGE_SIZE];
@@ -384,7 +386,7 @@ static void* ID_collect(void* nyx)
 					ctx->events[ctx->events_idx].offset = offset;
 				}
 				printf("Connected to EventID server and getting data\r\n");
-
+				ctx->ever_got_id = 1;
 			}
 			ctx->events[ctx->events_idx].t.tv_sec = tv.tv_sec;
 			ctx->events[ctx->events_idx].t.tv_usec = tv.tv_usec;
@@ -446,7 +448,7 @@ static void deliver_id(context_t *ctx)
 		return;
 	}
 
-	printf("waiting for connections...\r\n");
+	printf("Waiting for incoming connections...\r\n");
 
 	for (;;) { // main accept() loop
 		sin_size = sizeof(client_addr);
@@ -516,6 +518,10 @@ int main(int argc, char *argv[])
 	// connect to the EventID Server to gather information
 	pthread_create(&t, NULL, &ID_collect, ctx);
 #endif
+	// active wait for connection *cough*
+	do sleep(1);
+	while (!ctx->ever_got_id);
+
 	// deliver EventIDs with less jitter to users
 	deliver_id(ctx);
 
